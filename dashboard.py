@@ -21,12 +21,14 @@ st.set_page_config(
 def load_data():
     base = "data"
     return {
-        "summary":  pd.read_csv(f"{base}/game_summary.csv"),
-        "trend":    pd.read_csv(f"{base}/sentiment_trend.csv"),
-        "playtime": pd.read_csv(f"{base}/sentiment_by_playtime.csv"),
-        "purchase": pd.read_csv(f"{base}/sentiment_by_purchase_type.csv"),
-        "early":    pd.read_csv(f"{base}/sentiment_by_early_access.csv"),
-        "keywords": pd.read_csv(f"{base}/keywords.csv"),
+        "summary":        pd.read_csv(f"{base}/game_summary.csv"),
+        "trend":          pd.read_csv(f"{base}/sentiment_trend.csv"),
+        "playtime":       pd.read_csv(f"{base}/sentiment_by_playtime.csv"),
+        "purchase":       pd.read_csv(f"{base}/sentiment_by_purchase_type.csv"),
+        "early":          pd.read_csv(f"{base}/sentiment_by_early_access.csv"),
+        "keywords":       pd.read_csv(f"{base}/keywords.csv"),
+        "review_length":  pd.read_csv(f"{base}/sentiment_by_review_length.csv"),
+        "keyword_trends": pd.read_csv(f"{base}/keyword_trends.csv"),
     }
 
 data        = load_data()
@@ -56,7 +58,8 @@ playtime = df_playtime[df_playtime["game_name"] == selected_game].copy()
 purchase = df_purchase[df_purchase["game_name"] == selected_game]
 early    = df_early[df_early["game_name"]       == selected_game]
 keywords = df_keywords[df_keywords["game_name"] == selected_game]
-
+review_length  = data["review_length"][data["review_length"]["game_name"]   == selected_game].copy()
+keyword_trends = data["keyword_trends"][data["keyword_trends"]["game_name"] == selected_game]
 
 # ── Page header ──────────────────────────────────────────────────
 st.title(f"Steam Review Analytics — {selected_game}")
@@ -291,3 +294,119 @@ with col_neg:
         paper_bgcolor="rgba(0,0,0,0)"
     )
     st.plotly_chart(fig_neg, use_container_width=True)
+
+    # ── Row 5: Review volume + Review length vs sentiment ────────────
+col_left, col_right = st.columns(2)
+
+with col_left:
+    st.subheader("Review volume over time")
+
+    fig_volume = px.bar(
+        trend,
+        x="review_period",
+        y="review_count",
+        labels={
+            "review_period": "Month",
+            "review_count":  "Number of reviews"
+        },
+        color_discrete_sequence=["#7F77DD"]
+    )
+    fig_volume.update_layout(
+        xaxis_tickangle=-45,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+    st.plotly_chart(fig_volume, use_container_width=True)
+
+with col_right:
+    st.subheader("Sentiment by review length")
+
+    length_order = ["Short (< 150 chars)", "Medium (150–500 chars)", "Long (500+ chars)"]
+    review_length["review_length_bucket"] = pd.Categorical(
+        review_length["review_length_bucket"],
+        categories=length_order,
+        ordered=True
+    )
+    review_length = review_length.sort_values("review_length_bucket")
+
+    fig_length = px.bar(
+        review_length,
+        x="review_length_bucket",
+        y="avg_sentiment",
+        color="avg_sentiment",
+        text=review_length["avg_sentiment"].apply(lambda x: f"{x:+.2f}"),
+        hover_data=["review_count"],
+        labels={
+            "review_length_bucket": "Review length",
+            "avg_sentiment":        "Avg sentiment",
+            "review_count":         "Review count"
+        },
+        color_continuous_scale=["#E24B4A", "#F09595", "#9FE1CB", "#1D9E75"],
+        range_color=[-1, 1]
+    )
+    fig_length.update_traces(textposition="outside")
+    fig_length.update_layout(
+        coloraxis_showscale=False,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(range=[-1, 1])
+    )
+    st.plotly_chart(fig_length, use_container_width=True)
+
+st.markdown("---")
+
+
+# ── Row 6: Keyword trends over time ─────────────────────────────
+st.subheader("Keyword trends over time")
+st.caption("Top keywords per month — select a period to see what players were talking about")
+
+available_periods = sorted(keyword_trends["review_period"].unique().tolist())
+selected_period   = st.selectbox("Select a month", available_periods)
+
+df_period_keywords = keyword_trends[keyword_trends["review_period"] == selected_period]
+
+col_pos, col_neg = st.columns(2)
+
+period_pos = df_period_keywords[df_period_keywords["sentiment"] == "POSITIVE"] \
+    .sort_values("importance_score", ascending=True)
+
+period_neg = df_period_keywords[df_period_keywords["sentiment"] == "NEGATIVE"] \
+    .sort_values("importance_score", ascending=True)
+
+with col_pos:
+    st.markdown(f"##### 👍 Positive keywords — {selected_period}")
+    fig_ktrend_pos = px.bar(
+        period_pos,
+        x="importance_score",
+        y="word",
+        orientation="h",
+        labels={
+            "importance_score": "Importance",
+            "word":             "Keyword"
+        },
+        color_discrete_sequence=["#1D9E75"]
+    )
+    fig_ktrend_pos.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+    st.plotly_chart(fig_ktrend_pos, use_container_width=True)
+
+with col_neg:
+    st.markdown(f"##### 👎 Negative keywords — {selected_period}")
+    fig_ktrend_neg = px.bar(
+        period_neg,
+        x="importance_score",
+        y="word",
+        orientation="h",
+        labels={
+            "importance_score": "Importance",
+            "word":             "Keyword"
+        },
+        color_discrete_sequence=["#E24B4A"]
+    )
+    fig_ktrend_neg.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+    st.plotly_chart(fig_ktrend_neg, use_container_width=True)
