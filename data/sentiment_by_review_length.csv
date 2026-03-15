@@ -1,0 +1,4 @@
+game_name,review_length_bucket,avg_sentiment,review_count,avg_length
+Assassin’s Creed Shadows,Short (< 150 chars),0.29569408114739826,2675,53.8418691588785
+Assassin’s Creed Shadows,Medium (150–500 chars),0.0796084024978651,966,273.96790890269153
+Assassin’s Creed Shadows,Long (500+ chars),-0.08259148871121581,274,792.8467153284671
